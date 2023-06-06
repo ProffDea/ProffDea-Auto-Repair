@@ -1,0 +1,49 @@
+local sent_auto_repair_msg = false
+
+function set_msg_state(state)
+  sent_auto_repair_msg = state
+end
+
+function auto_repair(obj)
+  con = obj:condition() * 100
+  if con >= 79.0 or con <= 10.0 then return end
+
+  lm_t_obj = db.actor:object("leatherman_tool")
+  ss_obj = db.actor:object("sharpening_stones")
+  if not lm_t_obj then
+    return
+  elseif not ss_obj then
+    if not sent_auto_repair_msg then
+      CreateTimeEvent("delay_task", "notify_msg", 3, function()
+        n_msg = "[AUTO REPAIR] Out of sharpening stones"
+        news_manager.send_tip(db.actor, n_msg, nil, nil, nil)
+        return true
+      end)
+      set_msg_state(true)
+    end
+    return
+  end
+  con = lm_t_obj:condition()
+  new_con = clamp(lm_t_obj:condition() + 0.21, 0.01, 0.99)
+  utils_item.discharge(ss_obj)
+  lm_t_obj:set_condition(new_con)
+end
+
+base_func_disassembly = item_parts.func_disassembly
+function item_parts.func_disassembly(obj, obj_d)
+  base_func_disassembly(obj, obj_d)
+
+  obj_d = obj_d or item_parts.get_suitable_dtool(obj)
+  if not item_parts.is_suitable_dtool(obj, obj_d) then return end
+  auto_repair(obj_d)
+end
+
+function actor_on_item_take(obj)
+  if obj:section() ~= "sharpening_stones" then return end
+  if sent_auto_repair_msg ~= true then return end
+  set_msg_state(false)
+end
+
+function on_game_start()
+  RegisterScriptCallback("actor_on_item_take", actor_on_item_take)
+end
